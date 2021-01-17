@@ -4,18 +4,16 @@
     {
         _Color ("Color", Color) = (1,1,1,1)
         _MainTex ("Texture", 2D) = "white"{}
-        _Factor ("Factor", Range(1,20)) = 1
-        _Pixel ("Pixel", Range(0, 5)) = 1
+        _Factor ("Factor", Range(1,10)) = 1
+        _Pixel ("Pixel", Range(1, 10)) = 1
+        _CutOff("CutOff", Range(0,1)) = 0.4
     }
     SubShader
     {
         Tags { "RenderType"="Opaque" }
 
         LOD 100
-        Blend SrcAlpha OneMinusSrcAlpha
-
-        cull off
-
+        
         GrabPass
         {
             "_GrabTempTex"
@@ -23,6 +21,7 @@
 
         Pass
         {
+            Blend SrcAlpha OneMinusSrcAlpha
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
@@ -48,18 +47,19 @@
             int _Factor;
             sampler2D _GrabTempTex;
             float4 _GrabTempTex_ST;
-            float _Pixel;
+            float _CutOff;
+            int _Pixel;
 
             fixed4 blurImageCircle(sampler2D img, float2 uv, float r, float pixel)
             {
                 fixed4 col = 0.0;
                 float PI = 3.1415926;
-                for(float x = 0; x < r * pixel * 8.0; x += pixel)
+                for(float x = 0; x < r * pixel * 8; x += pixel)
                 {
-                    float angle = lerp(0.0, 2.0 *  PI, x / r * pixel * 8.0);
+                    float angle = lerp(-PI, PI, x / (r * pixel * 8));
                     col += tex2D(img, uv +(float2(cos(angle), sin(angle)) / _ScreenParams.xy *  r * pixel));
                 }
-                return col / (8.0 * r);
+                return col / (r * 8);
             }
 
             v2f vert (appdata v)
@@ -73,22 +73,24 @@
 
             fixed4 frag (v2f i) : SV_Target
             {
-                fixed4 mainCol = tex2D(_MainTex, i.uv) * _Color; 
+                fixed4 mainCol = tex2D(_MainTex, i.uv);
 
-                if(mainCol.a == 0)
-                {
+                if(mainCol.a <= _CutOff)
                     discard;
-                }
 
+                mainCol *= _Color;
                 float2 uv0 = i.grabPos.xy / i.grabPos.w;
-                fixed4 col = tex2D(_GrabTempTex, uv0);
-
+                fixed4 col = 0;
+                float total = 0;
                 for(int idx = 1; idx < _Factor; idx++)
                 {
-                    col += blurImageCircle(_GrabTempTex, uv0, idx, _Pixel);
+                    total += float(idx) / float(_Factor);
+                    col += blurImageCircle(_GrabTempTex, uv0, idx, _Pixel) * idx / _Factor;
                 }
-
-                col = col / _Factor;
+                if(total != 0)
+                {
+                    col /= total;
+                }
                 col.rgb = col.rgb * (1 - mainCol.a) + mainCol.rgb * mainCol.a;
 
                 return col;
