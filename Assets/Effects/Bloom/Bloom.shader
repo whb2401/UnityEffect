@@ -3,6 +3,9 @@
     Properties
     {
         _Effect("Effect", Range(0, 1)) = 0
+        _R("R", Range(0, 10)) = 1
+        _P("P", Range(0,10)) = 1
+        _Color("Color", color) = (1,1,1,1) 
     }
     SubShader
     {
@@ -42,15 +45,19 @@
             float _Effect;
             sampler2D _GrabTempTex;
             float4 _GrabTempTex_ST;
+            float _R;
+            float _P;
+            float4 _Color;
 
             float ave(fixed4 col)
             {
                 return (col.r + col.g + col.b)/3;
             }
 
-            fixed4 FindLightColorWithCircle(sampler2D img, float2 uv, float r, float pixel)
+            fixed4 FindLightColorWithCircle(sampler2D img, float2 uv, float r, float pixel, float4 srcCol)
             {
-                fixed4 col = 0.0;
+                fixed4 col = srcCol;
+                
                 float PI = 3.1415926;
                 for(float x = 0; x < r * pixel * 8.0; x += pixel)
                 {
@@ -59,7 +66,7 @@
 
                     fixed4 samplerCol = tex2D(img, uv0);
 
-                    if(ave(col) < ave(samplerCol))
+                    if(abs(ave(srcCol) - ave(samplerCol)) > abs(ave(srcCol) - ave(col)))
                     {
                         col = samplerCol;
                     }
@@ -83,18 +90,16 @@
                 fixed4 col = tex2D(_GrabTempTex, uv0);
 
                 fixed4 lightCol = col;
-                float samplerR = 1;
-                for(float idx = 1; idx < 10; idx ++)
+                for(float idx = 1; idx < _R; idx ++)
                 {
-                    fixed4 samplerCol = FindLightColorWithCircle(_GrabTempTex, uv0, idx, 1);
-                    if(ave(lightCol) < ave(samplerCol))
+                    fixed4 samplerCol = FindLightColorWithCircle(_GrabTempTex, uv0, idx, _P, col);
+                    if(length(lightCol) < length(samplerCol))
                     {
                         lightCol = samplerCol;
-                        samplerR = idx;
                     }
                 }
-
-                return col + lerp(0 , lightCol - col, _Effect);
+                
+                return col + lerp(0 , lightCol, _Effect)* (1 - _Color);
             }
             ENDCG
         }
